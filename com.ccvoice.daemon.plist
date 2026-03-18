@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+    "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  CC-Voice launchd agent template.
+  install.sh substitutes the __PLACEHOLDER__ tokens before copying this file
+  to ~/Library/LaunchAgents/com.ccvoice.daemon.plist.
+-->
+<plist version="1.0">
+<dict>
+
+    <key>Label</key>
+    <string>com.ccvoice.daemon</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>__VENV_PYTHON__</string>
+        <string>__DAEMON_PY__</string>
+    </array>
+
+    <!-- Start automatically at login -->
+    <key>RunAtLoad</key>
+    <true/>
+
+    <!--
+      Restart on crash (non-zero exit), but respect a deliberate
+      `launchctl stop` (which exits 0).
+    -->
+    <key>KeepAlive</key>
+    <dict>
+        <key>SuccessfulExit</key>
+        <false/>
+    </dict>
+
+    <!-- Prevent rapid-restart loops if the daemon crashes immediately -->
+    <key>ThrottleInterval</key>
+    <integer>10</integer>
+
+    <key>StandardOutPath</key>
+    <string>__STDOUT_LOG__</string>
+
+    <key>StandardErrorPath</key>
+    <string>__STDERR_LOG__</string>
+
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PATH</key>
+        <string>/usr/local/bin:/usr/bin:/bin:/opt/homebrew/bin</string>
+    </dict>
+
+</dict>
+</plist>
