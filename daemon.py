@@ -21,7 +21,7 @@ import sys
 import wave
 import array
 
-SOCKET_PATH = "/tmp/cc-voice.sock"
+SOCKET_PATH = os.environ.get("CC_VOICE_SOCKET", "/tmp/cc-voice.sock")
 INSTALL_DIR = os.path.expanduser("~/.local/share/cc-voice")
 CHIME_PATH = os.path.join(INSTALL_DIR, "chime.wav")
 LOG_PATH = os.path.join(INSTALL_DIR, "daemon.log")
