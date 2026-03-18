@@ -82,11 +82,33 @@ def generate_chime(path: str) -> None:
 
 
 def play_chime() -> None:
-    """Play the chime using macOS afplay (non-blocking from daemon's perspective
-    but we wait for it to finish before recording)."""
+    """Play the chime, trying platform audio players in order.
+
+    Tries afplay (macOS), then aplay/paplay/ffplay/sox (Linux).
+    Logs a warning and continues silently if none are available.
+    """
     if not os.path.exists(CHIME_PATH):
         generate_chime(CHIME_PATH)
-    subprocess.run(["afplay", CHIME_PATH], check=False)
+
+    players = [
+        ["afplay", CHIME_PATH],                   # macOS
+        ["aplay", "-q", CHIME_PATH],              # Linux ALSA
+        ["paplay", CHIME_PATH],                   # Linux PulseAudio
+        ["ffplay", "-nodisp", "-autoexit", "-loglevel", "quiet", CHIME_PATH],  # ffmpeg
+        ["sox", CHIME_PATH, "-d"],                # sox
+    ]
+
+    for cmd in players:
+        try:
+            subprocess.run(cmd, check=False, timeout=5)
+            return
+        except FileNotFoundError:
+            continue
+        except Exception as exc:
+            logger.warning("Audio player %s failed: %s", cmd[0], exc)
+            continue
+
+    logger.warning("No audio player found (afplay/aplay/paplay/ffplay/sox) — skipping chime")
 
 
 # ---------------------------------------------------------------------------
