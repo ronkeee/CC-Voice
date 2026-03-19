@@ -88,8 +88,19 @@ success "Python dependencies installed"
 info "Installing daemon and hook..."
 cp "$SCRIPT_DIR/daemon.py" "$INSTALL_DIR/daemon.py"
 cp "$SCRIPT_DIR/hook.sh"   "$INSTALL_DIR/hook.sh"
+cp "$SCRIPT_DIR/chime.sh"  "$INSTALL_DIR/chime.sh"
 chmod +x "$INSTALL_DIR/hook.sh"
+chmod +x "$INSTALL_DIR/chime.sh"
 success "Files installed"
+
+# ── Step 8: Pre-generate chime WAV ──────────────────────────────────────────
+info "Pre-generating chime..."
+"$INSTALL_DIR/chime.sh" </dev/null 2>/dev/null || true
+if [[ -f "$INSTALL_DIR/chime.wav" ]]; then
+    success "Chime generated at $INSTALL_DIR/chime.wav"
+else
+    warn "Chime generation skipped (Python 3 unavailable?) — will generate on first use"
+fi
 
 # ── Step 9: Install launchd plist ──────────────────────────────────────────
 info "Installing launchd agent..."
@@ -105,37 +116,52 @@ sed \
 
 success "Plist installed at $PLIST_PATH"
 
-# ── Step 10: Merge PermissionRequest hook into ~/.claude/settings.json ───────
-info "Registering PermissionRequest hook with Claude Code..."
+# ── Step 10: Merge hooks into ~/.claude/settings.json ────────────────────────
+info "Registering hooks with Claude Code..."
 
 python3 - <<PYEOF
 import json, os, sys
 
 settings_path = os.path.expanduser("$CLAUDE_SETTINGS")
-hook_path     = "$INSTALL_DIR/hook.sh"
+hook_sh    = "$INSTALL_DIR/hook.sh"
+chime_sh   = "$INSTALL_DIR/chime.sh"
 
 with open(settings_path) as f:
     settings = json.load(f)
 
-hook_entry = {
-    "matcher": "",
-    "hooks": [{"type": "command", "command": hook_path}],
-}
-
 hooks = settings.setdefault("hooks", {})
-existing = hooks.get("PermissionRequest", [])
 
-# Remove any prior CC-Voice entry (idempotent reinstall)
-existing = [
-    e for e in existing
+# ── PermissionRequest hook (approval via voice daemon) ──
+perm_entry = {
+    "matcher": "",
+    "hooks": [{"type": "command", "command": hook_sh}],
+}
+existing_perm = hooks.get("PermissionRequest", [])
+existing_perm = [
+    e for e in existing_perm
     if not any(
         h.get("command", "").endswith("cc-voice/hook.sh")
         for h in e.get("hooks", [])
     )
 ]
+existing_perm.append(perm_entry)
+hooks["PermissionRequest"] = existing_perm
 
-existing.append(hook_entry)
-hooks["PermissionRequest"] = existing
+# ── PostToolUse hook (chime after every Bash command) ──
+chime_entry = {
+    "matcher": "Bash",
+    "hooks": [{"type": "command", "command": chime_sh, "async": True}],
+}
+existing_post = hooks.get("PostToolUse", [])
+existing_post = [
+    e for e in existing_post
+    if not any(
+        h.get("command", "").endswith("cc-voice/chime.sh")
+        for h in e.get("hooks", [])
+    )
+]
+existing_post.append(chime_entry)
+hooks["PostToolUse"] = existing_post
 
 with open(settings_path, "w") as f:
     json.dump(settings, f, indent=4)
@@ -144,7 +170,7 @@ with open(settings_path, "w") as f:
 print("  Settings updated")
 PYEOF
 
-success "Claude Code hook registered"
+success "Claude Code hooks registered (PermissionRequest + PostToolUse/Bash)"
 
 # ── Step 11: Load and start daemon via launchctl ────────────────────────────
 info "Starting daemon via launchd..."
@@ -185,8 +211,9 @@ echo
 success "CC-Voice installed successfully!"
 echo
 echo "  How it works:"
-echo "    When Claude Code asks for approval, CC-Voice defers to Claude Code's"
-echo "    default permission handling."
+echo "    After each Bash command: a short chime plays (PostToolUse, no dialog)."
+echo "    When Claude Code asks for approval: CC-Voice defers to Claude Code's"
+echo "    default permission handling (PermissionRequest hook)."
 echo
 echo "  Management:"
 echo "    Logs:   $INSTALL_DIR/daemon.log"
