@@ -1,9 +1,4 @@
-"""Integration tests — start the real daemon subprocess and talk to it over the socket.
-
-Audio hardware is not required: when PortAudio is absent the daemon already
-falls back gracefully, returning {"permissionDecision": "ask"}.  These tests
-verify the full socket protocol end-to-end without needing a microphone.
-"""
+"""Integration tests — start the real daemon subprocess and talk to it over the socket."""
 
 import json
 import os
@@ -19,9 +14,7 @@ SOCKET_PATH = "/tmp/cc-voice-test.sock"
 DAEMON_PY = os.path.join(os.path.dirname(__file__), "..", "daemon.py")
 HOOK_SH = os.path.join(os.path.dirname(__file__), "..", "hook.sh")
 
-# Prefer the CC-Voice venv Python (has whisper/sounddevice); fall back to sys.executable
-_VENV_PYTHON = os.path.expanduser("~/.local/share/cc-voice/venv/bin/python")
-PYTHON = _VENV_PYTHON if os.path.exists(_VENV_PYTHON) else sys.executable
+PYTHON = sys.executable
 
 VALID_REQUEST = json.dumps({
     "session_id": "test-session",
@@ -41,9 +34,8 @@ VALID_DECISIONS = {"allow", "deny", "ask"}
 def daemon():
     """Start the daemon on a private socket path and yield; kill on teardown."""
     env = os.environ.copy()
-    env["CC_VOICE_SOCKET"] = SOCKET_PATH  # daemon reads this env var if set
+    env["CC_VOICE_SOCKET"] = SOCKET_PATH
 
-    # Remove stale socket
     if os.path.exists(SOCKET_PATH):
         os.unlink(SOCKET_PATH)
 
@@ -54,15 +46,15 @@ def daemon():
         stderr=subprocess.DEVNULL,
     )
 
-    # Wait up to 30s for the socket to appear (Whisper model load takes ~5-10s)
-    deadline = time.time() + 30
+    # Wait up to 5s for the socket to appear
+    deadline = time.time() + 5
     while time.time() < deadline:
         if os.path.exists(SOCKET_PATH):
             break
-        time.sleep(0.2)
+        time.sleep(0.1)
     else:
         proc.kill()
-        pytest.fail("Daemon did not create socket within 10s")
+        pytest.fail("Daemon did not create socket within 5s")
 
     yield proc
 
@@ -72,7 +64,7 @@ def daemon():
         os.unlink(SOCKET_PATH)
 
 
-def _send(payload: str, *, timeout: int = 35) -> dict:
+def _send(payload: str, *, timeout: int = 5) -> dict:
     """Send a raw JSON string to the daemon and return the parsed response."""
     s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
     s.settimeout(timeout)
@@ -144,14 +136,12 @@ def test_daemon_falls_back_on_malformed_json(daemon):
     s.connect(SOCKET_PATH)
     s.sendall(b"this is not json")
     s.shutdown(socket.SHUT_WR)
-    # Read whatever response comes back (may be fallback JSON or empty)
     try:
         s.recv(4096)
     except Exception:
         pass
     s.close()
 
-    # Daemon must still respond to a valid request afterwards
     data = _send(VALID_REQUEST)
     assert data["hookSpecificOutput"]["permissionDecision"] in VALID_DECISIONS
 
@@ -165,7 +155,6 @@ def production_daemon():
     """Start daemon on the production socket path for hook.sh tests."""
     prod_socket = "/tmp/cc-voice.sock"
 
-    # Skip if already running (don't kill user's daemon)
     if os.path.exists(prod_socket):
         yield None
         return
@@ -175,14 +164,14 @@ def production_daemon():
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
     )
-    deadline = time.time() + 10
+    deadline = time.time() + 5
     while time.time() < deadline:
         if os.path.exists(prod_socket):
             break
-        time.sleep(0.2)
+        time.sleep(0.1)
     else:
         proc.kill()
-        pytest.fail("Daemon did not start within 10s")
+        pytest.fail("Daemon did not start within 5s")
 
     yield proc
 
@@ -199,7 +188,7 @@ def test_hook_sh_round_trip(production_daemon):
         ["/bin/bash", HOOK_SH],
         input=VALID_REQUEST.encode(),
         capture_output=True,
-        timeout=40,
+        timeout=10,
     )
     assert result.returncode == 0, f"hook.sh exited {result.returncode}"
 

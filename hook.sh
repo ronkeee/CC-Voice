@@ -13,7 +13,7 @@
 set -euo pipefail
 
 SOCKET="/tmp/cc-voice.sock"
-TIMEOUT=35  # seconds (covers chime + 5s recording + transcription + margin)
+TIMEOUT=5  # seconds
 
 FALLBACK='{"hookSpecificOutput":{"hookEventName":"PermissionRequest","permissionDecision":"ask","permissionDecisionReason":"CC-Voice: daemon not running or timed out — deferring to Claude Code"}}'
 
@@ -33,7 +33,7 @@ import json
 import os
 
 SOCKET_PATH = "/tmp/cc-voice.sock"
-TIMEOUT = int(os.environ.get("CC_VOICE_TIMEOUT", "35"))
+TIMEOUT = int(os.environ.get("CC_VOICE_TIMEOUT", "5"))
 FALLBACK = json.dumps({
     "hookSpecificOutput": {
         "hookEventName": "PermissionRequest",
