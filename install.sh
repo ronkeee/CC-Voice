@@ -79,29 +79,19 @@ else
 fi
 
 # ── Step 6: Install Python dependencies ─────────────────────────────────────
-info "Installing Python dependencies (this may take a few minutes)..."
+info "Installing Python dependencies..."
 "$INSTALL_DIR/venv/bin/pip" install --upgrade pip --quiet
 "$INSTALL_DIR/venv/bin/pip" install -r "$SCRIPT_DIR/requirements.txt" --quiet
 success "Python dependencies installed"
 
-# ── Step 7: Pre-download Whisper tiny model ──────────────────────────────────
-info "Pre-downloading Whisper 'tiny' model (~75MB, runs offline after this)..."
-"$INSTALL_DIR/venv/bin/python" -c "import whisper; whisper.load_model('tiny'); print('  Model ready')"
-success "Whisper model downloaded"
-
-# ── Step 8: Copy daemon and hook files ──────────────────────────────────────
+# ── Step 7: Copy daemon and hook files ──────────────────────────────────────
 info "Installing daemon and hook..."
 cp "$SCRIPT_DIR/daemon.py" "$INSTALL_DIR/daemon.py"
 cp "$SCRIPT_DIR/hook.sh"   "$INSTALL_DIR/hook.sh"
 chmod +x "$INSTALL_DIR/hook.sh"
 success "Files installed"
 
-# ── Step 9: Generate chime.wav ──────────────────────────────────────────────
-info "Generating chime sound..."
-"$INSTALL_DIR/venv/bin/python" "$INSTALL_DIR/daemon.py" --generate-chime
-success "Chime generated"
-
-# ── Step 10: Install launchd plist ──────────────────────────────────────────
+# ── Step 9: Install launchd plist ──────────────────────────────────────────
 info "Installing launchd agent..."
 mkdir -p "$HOME/Library/LaunchAgents"
 
@@ -115,7 +105,7 @@ sed \
 
 success "Plist installed at $PLIST_PATH"
 
-# ── Step 11: Merge PermissionRequest hook into ~/.claude/settings.json ───────
+# ── Step 10: Merge PermissionRequest hook into ~/.claude/settings.json ───────
 info "Registering PermissionRequest hook with Claude Code..."
 
 python3 - <<PYEOF
@@ -156,7 +146,7 @@ PYEOF
 
 success "Claude Code hook registered"
 
-# ── Step 12: Load and start daemon via launchctl ────────────────────────────
+# ── Step 11: Load and start daemon via launchctl ────────────────────────────
 info "Starting daemon via launchd..."
 
 # Unload first if already loaded (clean reinstall)
@@ -166,7 +156,7 @@ launchctl start  "$PLIST_LABEL" 2>/dev/null || true
 
 success "Daemon started"
 
-# ── Step 13: Health check ────────────────────────────────────────────────────
+# ── Step 12: Health check ────────────────────────────────────────────────────
 info "Health check (waiting 4s for daemon to start)..."
 sleep 4
 
@@ -195,16 +185,8 @@ echo
 success "CC-Voice installed successfully!"
 echo
 echo "  How it works:"
-echo "    When Claude Code asks for approval, CC-Voice will:"
-echo "      1. Play a chime sound"
-echo "      2. Record 5 seconds of audio"
-echo "      3. Transcribe with Whisper (offline)"
-echo "      4. Map your voice to: allow / deny / ask"
-echo
-echo "  Voice commands:"
-echo "    Allow:  yes, yeah, approve, go, proceed, one, 1 ..."
-echo "    Deny:   no, nope, deny, reject, stop, cancel, two, 2 ..."
-echo "    Unsure: anything else → Claude Code shows its normal prompt"
+echo "    When Claude Code asks for approval, CC-Voice defers to Claude Code's"
+echo "    default permission handling."
 echo
 echo "  Management:"
 echo "    Logs:   $INSTALL_DIR/daemon.log"
